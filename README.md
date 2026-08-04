@@ -86,6 +86,7 @@ winlinux.exe -c "exit 42"    # 退出码 42
 .\install.ps1              # 安装，无需管理员
 .\install.ps1 -GitRoot "D:\Git"   # 指定 Git 安装根
 .\install.ps1 -Force       # 重新生成与覆盖
+.\uninstall.ps1            # 卸载：删除 shim 并清理用户 PATH
 ```
 
 安装到 `%LOCALAPPDATA%\winlinux\bin` 会执行：

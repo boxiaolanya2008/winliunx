@@ -9,6 +9,7 @@
 
 - `install.ps1`：一键全局安装，把 winlinux.exe 与 90+ 常用 Linux 命令 `.cmd` shim 写入
   用户级 PATH（无需管理员）
+- `uninstall.ps1`：对称卸载，删除 bin 目录与 `.cmd` shim 并清理用户 PATH
 - shim 经 Git Bash 转发 GNU 工具，保留 glob 展开、管道、重定向与退出码透传
 - PowerShell / cmd / 任意终端可直接使用 `ls`、`grep`、`cat`、`ps` 等 Linux 命令
 - README 新增「全局命令」与「接入 AI 对话工具 / Agent」指南
