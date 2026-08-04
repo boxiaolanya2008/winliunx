@@ -3,15 +3,10 @@
 <!-- 语言切换 -->
 [English](README.en.md) · 中文
 
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/)
+[![CI](https://github.com/boxiaolanya2008/winliunx/actions/workflows/ci.yml/badge.svg)](https://github.com/boxiaolanya2008/winliunx/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6.svg)](#)
 [![C11](https://img.shields.io/badge/standard-C11-5B5B5B.svg)](#)
-
-<!--
-推送到 GitHub 后，把上面 CI 徽章替换为你的真实仓库徽章：
-[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
--->
 
 原生 Win32 编写的 **Git Bash 命令外壳**：输入 Linux 命令，由 Git for Windows 自带的 GNU 工具层执行，输出回流到窗口。专为「习惯于 Linux 命令、却在 PowerShell 里无法直接使用」的 AI 大模型与开发者设计。
 

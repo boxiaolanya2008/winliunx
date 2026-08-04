@@ -2,7 +2,7 @@
 
 中文 · [English](README.en.md)
 
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/)
+[![CI](https://github.com/boxiaolanya2008/winliunx/actions/workflows/ci.yml/badge.svg)](https://github.com/boxiaolanya2008/winliunx/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6.svg)](#)
 [![C11](https://img.shields.io/badge/standard-C11-5B5B5B.svg)](#)
