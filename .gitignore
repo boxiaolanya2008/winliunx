@@ -1,0 +1,16 @@
+build/
+build-release/
+build-debug/
+*.o
+*.obj
+*.exe
+*.dll
+*.a
+cmake-build-*/
+Debug/
+Release/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+.vscode/
+.idea/

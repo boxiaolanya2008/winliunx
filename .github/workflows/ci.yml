@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-windows:
+    strategy:
+      matrix:
+        generator:
+          - name: msvc
+            shell: cmd
+            config: '"Visual Studio 17 2022"'
+          - name: mingw
+            shell: pwsh
+            config: 'MinGW Makefiles'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: ${{ matrix.generator.shell }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Git Bash and toolchain (mingw leg)
+        if: matrix.generator.name == 'mingw'
+        run: |
+          choco install git mingw -y --no-progress
+      - name: Install Git Bash (msvc leg)
+        if: matrix.generator.name == 'msvc'
+        run: |
+          choco install git -y --no-progress
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -G "${{ matrix.generator.config }}"
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
