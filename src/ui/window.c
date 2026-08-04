@@ -1,5 +1,6 @@
 #include "ui/window.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -8,10 +9,17 @@
 
 #define WINX_WM_OUTPUT (WM_APP + 1)
 
+static void paint_spinner(HDC hdc, int cx, int cy, int deg);
+
 static const TCHAR *g_class_name = TEXT("WinXTermClass");
 static const int CTRL_INPUT = 1001;
 static const int CTRL_RUN = 1002;
 static const int CTRL_OUTPUT = 1003;
+
+static void app_start_boot_animation(winx_app *app);
+static void app_boot_tick(winx_app *app);
+static void app_start_spin(winx_app *app);
+static void app_stop_spin(winx_app *app);
 
 typedef struct ui_buffer {
     char *data;
@@ -31,6 +39,13 @@ struct winx_app {
     ui_buffer pending;
     int dirty;
     const char *git_hint;
+
+    int running;
+    int spin_deg;
+    UINT spin_timer;
+    int boot_phase;
+    UINT boot_timer;
+    HWND banner;
 };
 
 static void ui_buffer_append(ui_buffer *b, const char *bytes, size_t len)
@@ -97,6 +112,8 @@ static void do_run_impl(winx_app *app)
         append_edit_text(app->output, echo);
     }
     winx_executor_run(&app->exec, buf);
+    winx_executor_run(&app->exec, "printf '\\n__WINX_DONE__\\n'");
+    app_start_spin(app);
 
     SendMessageA(app->input, EM_SETSEL, 0, -1);
     SetFocus(app->input);
@@ -112,7 +129,22 @@ static void do_run(HWND hwnd)
 
 static void flush_pending_locked(winx_app *app)
 {
+    static const char marker[] = "__WINX_DONE__";
+    char *pos;
+    char *nl;
+
     if (app->pending.len > 0) {
+        pos = strstr(app->pending.data, marker);
+        if (pos != NULL) {
+            nl = strrchr(app->pending.data, '\n');
+            if (nl != NULL) {
+                *nl = '\0';
+            } else {
+                *pos = '\0';
+            }
+            app->pending.len = strlen(app->pending.data);
+            app_stop_spin(app);
+        }
         append_edit_text(app->output, app->pending.data);
         app->pending.len = 0;
         if (app->pending.data != NULL) {
@@ -136,14 +168,53 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
             const int gap = 6;
             const int btn_w = 64;
             const int margin = 8;
+            const int status_h = 22;
             MoveWindow(app->input, margin, margin, w - 2 * margin - btn_w - gap,
                        input_h, TRUE);
             MoveWindow(app->run_btn, w - margin - btn_w, margin, btn_w,
                        input_h, TRUE);
             MoveWindow(app->output, margin, margin + input_h + gap,
-                       w - 2 * margin, h - 2 * margin - input_h - gap, TRUE);
+                       w - 2 * margin, h - 2 * margin - input_h - gap -
+                           status_h,
+                       TRUE);
         }
         return 0;
+
+    case WM_TIMER:
+        if (app != NULL && wparam == 1) {
+            app_boot_tick(app);
+            return 0;
+        }
+        if (app != NULL && wparam == 2) {
+            RECT s;
+            app->spin_deg = (app->spin_deg + 12) % 360;
+            GetClientRect(hwnd, &s);
+            s.left = s.right - 50;
+            s.top = s.bottom - 22;
+            InvalidateRect(hwnd, &s, FALSE);
+            return 0;
+        }
+        break;
+
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc;
+        if (app != NULL && app->running) {
+            RECT c;
+            COLORREF bkg;
+            HBRUSH bg;
+            GetClientRect(hwnd, &c);
+            hdc = BeginPaint(hwnd, &ps);
+            bkg = GetSysColor(COLOR_WINDOW);
+            bg = CreateSolidBrush(bkg);
+            FillRect(hdc, &ps.rcPaint, bg);
+            DeleteObject(bg);
+            paint_spinner(hdc, c.right - 24, c.bottom - 11, app->spin_deg);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        break;
+    }
 
     case WINX_WM_OUTPUT:
         if (app != NULL) {
@@ -203,6 +274,190 @@ winx_app *winx_app_create(const char *git_hint)
     return app;
 }
 
+#define WINX_BANNER_CLASS "WinXBootBanner"
+#define WINX_BANNER_LIFE_MS 1400
+#define WINX_SPIN_TICK 60
+
+static COLORREF lerp_color(COLORREF a, COLORREF b, int t, int n)
+{
+    int aa = GetRValue(a) + (GetRValue(b) - GetRValue(a)) * t / n;
+    int ab = GetGValue(a) + (GetGValue(b) - GetGValue(a)) * t / n;
+    int ac = GetBValue(a) + (GetBValue(b) - GetBValue(a)) * t / n;
+    return RGB((BYTE)aa, (BYTE)ab, (BYTE)ac);
+}
+
+static void banner_draw_rows(HDC hdc, const RECT *r, COLORREF a, COLORREF b,
+                             int y0, int y1)
+{
+    int y;
+    int h = y1 - y0;
+    for (y = 0; y < h; ++y) {
+        HBRUSH br = CreateSolidBrush(lerp_color(a, b, y, h));
+        RECT line;
+        line.left = 0;
+        line.right = r->right;
+        line.top = y0 + y;
+        line.bottom = line.top + 1;
+        FillRect(hdc, &line, br);
+        DeleteObject(br);
+    }
+}
+
+static LRESULT CALLBACK banner_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    static COLORREF top = RGB(20, 30, 48);
+    static COLORREF bottom = RGB(24, 90, 150);
+
+    switch (msg) {
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc;
+        RECT r;
+        HFONT big;
+        HFONT old;
+        char title[64] = "winlinux";
+        char sub[64] = "Git Bash command shell";
+        RECT tr;
+        RECT sr;
+
+        hdc = BeginPaint(hwnd, &ps);
+        GetClientRect(hwnd, &r);
+        banner_draw_rows(hdc, &r, top, bottom, 0, r.bottom);
+
+        big = CreateFontA(-34, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                          DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                          CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+                          FIXED_PITCH | FF_MODERN, "Consolas");
+        old = (HFONT)SelectObject(hdc, big);
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, RGB(240, 246, 255));
+        tr = r;
+        tr.top = (r.bottom - r.top) / 2 - 44;
+        DrawTextA(hdc, title, -1, &tr, DT_CENTER | DT_SINGLELINE);
+        SelectObject(hdc, old);
+        DeleteObject(big);
+
+        big = CreateFontA(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                          DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                          CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+                          FIXED_PITCH | FF_MODERN, "Consolas");
+        old = (HFONT)SelectObject(hdc, big);
+        SetTextColor(hdc, RGB(200, 214, 232));
+        sr = r;
+        sr.top = (r.bottom - r.top) / 2;
+        DrawTextA(hdc, sub, -1, &sr, DT_CENTER | DT_SINGLELINE);
+        SelectObject(hdc, old);
+        DeleteObject(big);
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_ERASEBKGND:
+        return 1;
+    default:
+        break;
+    }
+    return DefWindowProcA(hwnd, msg, wparam, lparam);
+}
+
+static int register_banner_class(HINSTANCE hinst)
+{
+    WNDCLASSA c;
+    memset(&c, 0, sizeof(c));
+    c.lpfnWndProc = banner_proc;
+    c.hInstance = hinst;
+    c.hCursor = LoadCursor(NULL, IDC_ARROW);
+    c.lpszClassName = WINX_BANNER_CLASS;
+    c.hbrBackground = NULL;
+    return RegisterClassA(&c) != 0;
+}
+
+static void app_start_boot_animation(winx_app *app)
+{
+    RECT r;
+    GetClientRect(app->hwnd, &r);
+    app->banner = CreateWindowExA(WS_EX_LAYERED, WINX_BANNER_CLASS, "",
+                                  WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                                  0, 0, r.right - r.left, r.bottom - r.top,
+                                  app->hwnd, NULL, app->hinst, NULL);
+    SetWindowPos(app->banner, HWND_TOP, 0, 0, 0, 0,
+                 SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+    AnimateWindow(app->banner, 260, AW_BLEND);
+    app->boot_phase = 0;
+    app->boot_timer = (UINT)SetTimer(app->hwnd, 1, WINX_BANNER_LIFE_MS / 8, NULL);
+}
+
+static void app_boot_tick(winx_app *app)
+{
+    if (app->banner != NULL) {
+        if (app->boot_phase >= 8) {
+            KillTimer(app->hwnd, app->boot_timer);
+            app->boot_timer = 0;
+            AnimateWindow(app->banner, 240, AW_BLEND | AW_HIDE);
+            DestroyWindow(app->banner);
+            app->banner = NULL;
+            RedrawWindow(app->hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
+            return;
+        }
+    }
+    ++app->boot_phase;
+    if (app->banner != NULL && app->boot_timer != 0) {
+        KillTimer(app->hwnd, app->boot_timer);
+        app->boot_timer = (UINT)SetTimer(app->hwnd, 1,
+                                         WINX_BANNER_LIFE_MS / 8, NULL);
+    }
+}
+
+static void app_start_spin(winx_app *app)
+{
+    if (app->running) {
+        return;
+    }
+    app->running = 1;
+    app->spin_deg = 0;
+    app->spin_timer = (UINT)SetTimer(app->hwnd, 2, WINX_SPIN_TICK, NULL);
+}
+
+static void app_stop_spin(winx_app *app)
+{
+    if (!app->running) {
+        return;
+    }
+    app->running = 0;
+    if (app->spin_timer != 0) {
+        KillTimer(app->hwnd, app->spin_timer);
+        app->spin_timer = 0;
+    }
+}
+
+static void paint_spinner(HDC hdc, int cx, int cy, int deg)
+{
+    static const COLORREF palette[8] = {
+        RGB(0, 160, 120), RGB(0, 150, 180), RGB(40, 110, 220),
+        RGB(120, 80, 220), RGB(200, 60, 200), RGB(230, 70, 120),
+        RGB(240, 130, 40), RGB(220, 180, 30)
+    };
+    int i;
+    int radius = 7;
+    double ang;
+    for (i = 0; i < 8; ++i) {
+        HBRUSH br;
+        RECT rc;
+        ang = (double)i * 45.0;
+        {
+            double rad = (ang + deg) * 3.14159265358979323846 / 180.0;
+            rc.left = cx + (int)((double)radius * 0.9 * cos(rad)) - 2;
+            rc.top = cy + (int)((double)radius * 0.9 * sin(rad)) - 2;
+            rc.right = rc.left + 4;
+            rc.bottom = rc.top + 4;
+        }
+        br = CreateSolidBrush(palette[i]);
+        FillRect(hdc, &rc, br);
+        DeleteObject(br);
+    }
+}
+
+
 int winx_app_run(winx_app *app, int ncmdshow)
 {
     WNDCLASSA wc;
@@ -235,16 +490,10 @@ int winx_app_run(winx_app *app, int ncmdshow)
         }
     }
 
+    win_w = 720;
+    win_h = 480;
     screen_w = GetSystemMetrics(SM_CXSCREEN);
     screen_h = GetSystemMetrics(SM_CYSCREEN);
-    win_w = (screen_w * 65) / 100;
-    win_h = (screen_h * 75) / 100;
-    if (win_w < 1000) {
-        win_w = 1000;
-    }
-    if (win_h < 620) {
-        win_h = 620;
-    }
 
     if (winx_executor_open(&app->exec, app->git_hint) != 0) {
         MessageBoxA(NULL,
@@ -265,6 +514,7 @@ int winx_app_run(winx_app *app, int ncmdshow)
         winx_executor_close(&app->exec);
         return 1;
     }
+    register_banner_class(app->hinst);
 
     rect.left = 0;
     rect.top = 0;
@@ -327,6 +577,7 @@ int winx_app_run(winx_app *app, int ncmdshow)
 
     ShowWindow(app->hwnd, ncmdshow);
     UpdateWindow(app->hwnd);
+    app_start_boot_animation(app);
 
     SendMessage(app->input, WM_SETTEXT, 0, (LPARAM)"ls -la");
 
