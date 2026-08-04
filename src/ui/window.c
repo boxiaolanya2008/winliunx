@@ -210,11 +210,41 @@ int winx_app_run(winx_app *app, int ncmdshow)
     MSG msg;
     int ret;
     DWORD style;
+    int screen_w;
+    int screen_h;
+    int win_w;
+    int win_h;
+    HMODULE user32;
 
     if (app == NULL) {
         return 1;
     }
     app->hinst = GetModuleHandleA(NULL);
+
+    user32 = GetModuleHandleA("user32.dll");
+    if (user32 != NULL) {
+        union {
+            FARPROC raw;
+            BOOL(WINAPI *dpi)(void *);
+        } fn;
+        fn.raw = GetProcAddress(user32, "SetProcessDpiAwarenessContext");
+        if (fn.raw != NULL) {
+            fn.dpi((void *)(LONG_PTR)-4);
+        } else {
+            SetProcessDPIAware();
+        }
+    }
+
+    screen_w = GetSystemMetrics(SM_CXSCREEN);
+    screen_h = GetSystemMetrics(SM_CYSCREEN);
+    win_w = (screen_w * 65) / 100;
+    win_h = (screen_h * 75) / 100;
+    if (win_w < 1000) {
+        win_w = 1000;
+    }
+    if (win_h < 620) {
+        win_h = 620;
+    }
 
     if (winx_executor_open(&app->exec, app->git_hint) != 0) {
         MessageBoxA(NULL,
@@ -238,8 +268,8 @@ int winx_app_run(winx_app *app, int ncmdshow)
 
     rect.left = 0;
     rect.top = 0;
-    rect.right = 720;
-    rect.bottom = 480;
+    rect.right = win_w;
+    rect.bottom = win_h;
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
 
     app->hwnd = CreateWindowExA(
@@ -253,6 +283,22 @@ int winx_app_run(winx_app *app, int ncmdshow)
         return 1;
     }
     SetWindowLongPtr(app->hwnd, GWLP_USERDATA, (LONG_PTR)app);
+    {
+        int x;
+        int y;
+        RECT rc;
+        GetWindowRect(app->hwnd, &rc);
+        x = (screen_w - (rc.right - rc.left)) / 2;
+        y = (screen_h - (rc.bottom - rc.top)) / 2;
+        if (x < 0) {
+            x = 0;
+        }
+        if (y < 0) {
+            y = 0;
+        }
+        SetWindowPos(app->hwnd, NULL, x, y, 0, 0,
+                     SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW);
+    }
 
     app->font = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,

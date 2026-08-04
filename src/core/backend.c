@@ -76,6 +76,43 @@ int winx_backend_resolve(const char *hint, winx_backend *out)
     return -1;
 }
 
+static char *build_env_block(const char *git_root)
+{
+    DWORD sys_len;
+    char *win_path;
+    size_t off = 0;
+    char *buf;
+    int n;
+
+    sys_len = GetEnvironmentVariableA("PATH", NULL, 0);
+    win_path = (char *)malloc(sys_len + 2);
+    if (win_path == NULL) {
+        return NULL;
+    }
+    GetEnvironmentVariableA("PATH", win_path, sys_len + 1);
+
+    buf = (char *)malloc(32768);
+    if (buf == NULL) {
+        free(win_path);
+        return NULL;
+    }
+
+    n = snprintf(buf, 32768,
+                 "PATH=%s\\usr\\bin;%s\\usr\\sbin;%s\\bin;%s;MSYSTEM=MSYS;"
+                 "MSYSTEM_CHOST=x86_64-w64-mingw32;CHERE_INVOKING=1;",
+                 git_root, git_root, git_root, win_path);
+    if (n > 0) {
+        off = (size_t)n;
+    }
+    if (off >= 32768) {
+        off = 32767;
+    }
+    free(win_path);
+    buf[off++] = '\0';
+    buf[off] = '\0';
+    return buf;
+}
+
 int winx_backend_spawn(winx_backend *b)
 {
     STARTUPINFOA si;
@@ -116,6 +153,8 @@ int winx_backend_spawn(winx_backend *b)
     snprintf(cmdline, sizeof(cmdline),
              "\"%s\" --noprofile --norc -s", b->bash_path);
 
+    b->env = build_env_block(b->git_root);
+
     ok = CreateProcessA(
         b->bash_path,
         cmdline,
@@ -123,7 +162,7 @@ int winx_backend_spawn(winx_backend *b)
         NULL,
         TRUE,
         CREATE_NO_WINDOW,
-        NULL,
+        b->env,
         NULL,
         &si,
         &b->proc);
@@ -172,6 +211,8 @@ void winx_backend_close(winx_backend *b)
     if (b == NULL) {
         return;
     }
+    free(b->env);
+    b->env = NULL;
     if (b->proc.hThread != NULL) {
         CloseHandle(b->proc.hThread);
     }

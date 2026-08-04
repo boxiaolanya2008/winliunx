@@ -17,6 +17,7 @@ typedef struct winx_backend {
     HANDLE stderr_write;
     char bash_path[WINX_BACKEND_PATH_MAX];
     char git_root[WINX_BACKEND_PATH_MAX];
+    char *env;
     int alive;
 } winx_backend;
 

@@ -92,10 +92,34 @@ static void test_executor_pwd(void)
     REPORT_SUITE("executor.pwd");
 }
 
+static void test_executor_ls(void)
+{
+    winx_executor e;
+    capture cap;
+    int rc;
+
+    memset(&cap, 0, sizeof(cap));
+    rc = winx_executor_open(&e, NULL);
+    CHECK(rc == 0);
+    if (rc != 0) {
+        return;
+    }
+    winx_executor_on_output(&e, capture_on_output, &cap);
+
+    CHECK(winx_executor_run(&e, "ls -la") == 0);
+    CHECK(wait_contains(&cap, "total", 8000));
+    CHECK(strstr(cap.buf, "drwx") != NULL);
+
+    winx_executor_terminate(&e);
+    winx_executor_close(&e);
+    REPORT_SUITE("executor.ls");
+}
+
 int main(void)
 {
     test_backend_resolve();
     test_executor_echo();
     test_executor_pwd();
+    test_executor_ls();
     return g_failures > 0 ? 1 : 0;
 }

@@ -3,6 +3,20 @@
 本项目严格遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.1.1 - 2026-08-04
+
+### 修复
+
+- 修复 Git Bash 非交互模式下 `ls` 等命令无法找到：启动时注入环境块，前置
+  `<git_root>\usr\bin` 到 `PATH` 并设置 `MSYSTEM`/`CHERE_INVOKING`
+- 修复 2K 高分辨率屏窗口模糊与过小：声明 Per-Monitor DPI awareness，
+  初始窗口尺寸自适应屏幕（宽 65% / 高 75%）
+- 消除函数指针强转编译警告（union 拷贝）
+
+### 测试
+
+- 新增 `ls -la` 回归测试，覆盖 PATH 注入后外置命令解析
+
 ## 0.1.0 - 2026-08-04
 
 ### 新增
