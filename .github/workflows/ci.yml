@@ -13,7 +13,7 @@ jobs:
         generator:
           - name: msvc
             shell: cmd
-            config: '"Visual Studio 17 2022"'
+            config: 'Visual Studio 17 2022'
           - name: mingw
             shell: pwsh
             config: 'MinGW Makefiles'
