@@ -1,5 +1,7 @@
 #include "core/executor.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void forward_output(const char *bytes, size_t len, void *ud)
@@ -121,4 +123,136 @@ void winx_executor_close(winx_executor *e)
     }
     winx_backend_close(&e->backend);
     e->state = WINX_EXEC_DEAD;
+}
+
+static int winx_read_until_eof(HANDLE proc, HANDLE pipe,
+                               char *out, size_t outcap,
+                               size_t *olen, DWORD timeout_ms)
+{
+    DWORD ws;
+    DWORD code = 0;
+    int started = 0;
+
+    for (;;) {
+        DWORD n;
+        BOOL ok = ReadFile(pipe, out + *olen,
+                           (DWORD)(outcap - *olen - 1), &n, NULL);
+        if (!ok || n == 0) {
+            break;
+        }
+        *olen += n;
+        started = 1;
+        if (*olen + 1 >= outcap) {
+            break;
+        }
+    }
+
+    ws = WaitForSingleObject(proc, started ? timeout_ms : 5000);
+    if (ws != WAIT_OBJECT_0) {
+        WaitForSingleObject(proc, timeout_ms);
+    }
+    GetExitCodeProcess(proc, &code);
+    if (outcap > 0 && olen != NULL) {
+        out[*olen] = '\0';
+    }
+    return (int)code;
+}
+
+int winx_executor_run_once(const char *command, const char *git_hint,
+                           char *out, size_t outcap, int *exit_code)
+{
+    winx_backend b;
+    STARTUPINFOA si;
+    SECURITY_ATTRIBUTES sa;
+    PROCESS_INFORMATION pi;
+    char bash_path[WINX_BACKEND_PATH_MAX];
+    char *cmd;
+    HANDLE sin_r, sin_w, sout_r, sout_w;
+    size_t olen = 0;
+    int child_rc = -1;
+    size_t cmd_len;
+
+    if (out == NULL || command == NULL) {
+        return -1;
+    }
+    memset(&pi, 0, sizeof(pi));
+
+    if (winx_backend_resolve(git_hint, &b) != 0) {
+        return -1;
+    }
+    if (winx_backend_build_env(&b) != 0) {
+        winx_backend_close(&b);
+        return -1;
+    }
+    snprintf(bash_path, sizeof(bash_path), "%s", b.bash_path);
+
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    sa.lpSecurityDescriptor = NULL;
+
+    if (!CreatePipe(&sin_r, &sin_w, &sa, 4096) ||
+        !CreatePipe(&sout_r, &sout_w, &sa, 4096)) {
+        winx_backend_close(&b);
+        return -1;
+    }
+    SetHandleInformation(sin_w, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(sout_r, HANDLE_FLAG_INHERIT, 0);
+
+    cmd_len = strlen(command);
+    if (cmd_len > 60000) {
+        CloseHandle(sin_r); CloseHandle(sin_w);
+        CloseHandle(sout_r); CloseHandle(sout_w);
+        winx_backend_close(&b);
+        return -1;
+    }
+    cmd = (char *)malloc(cmd_len + WINX_BACKEND_PATH_MAX + 32);
+    if (cmd == NULL) {
+        CloseHandle(sin_r); CloseHandle(sin_w);
+        CloseHandle(sout_r); CloseHandle(sout_w);
+        winx_backend_close(&b);
+        return -1;
+    }
+    snprintf(cmd, cmd_len + WINX_BACKEND_PATH_MAX + 32,
+             "\"%s\" -s", bash_path);
+
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.hStdInput = sin_r;
+    si.hStdOutput = sout_w;
+    si.hStdError = sout_w;
+    si.wShowWindow = SW_HIDE;
+
+    if (!CreateProcessA(NULL, cmd, NULL, NULL, TRUE,
+                        CREATE_NO_WINDOW, b.env, NULL, &si, &pi)) {
+        free(cmd);
+        CloseHandle(sin_r); CloseHandle(sin_w);
+        CloseHandle(sout_r); CloseHandle(sout_w);
+        winx_backend_close(&b);
+        return -1;
+    }
+    free(cmd);
+
+    CloseHandle(sin_r);
+    CloseHandle(sout_w);
+
+    {
+        DWORD w;
+        WriteFile(sin_w, command, (DWORD)cmd_len, &w, NULL);
+        WriteFile(sin_w, "\n", 1, &w, NULL);
+    }
+    CloseHandle(sin_w);
+
+    child_rc = winx_read_until_eof(pi.hProcess, sout_r, out, outcap, &olen,
+                                   45000);
+
+    CloseHandle(sout_r);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    winx_backend_close(&b);
+
+    if (exit_code != NULL && child_rc >= 0) {
+        *exit_code = child_rc;
+    }
+    return (child_rc >= 0) ? 0 : -1;
 }

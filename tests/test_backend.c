@@ -115,11 +115,39 @@ static void test_executor_ls(void)
     REPORT_SUITE("executor.ls");
 }
 
+static void test_run_once(void)
+{
+    char out[65536];
+    int code = -1;
+
+    CHECK(winx_executor_run_once("echo CLI_TOKEN_99", NULL,
+                                 out, sizeof(out), &code) == 0);
+    CHECK(code == 0);
+    CHECK(strstr(out, "CLI_TOKEN_99") != NULL);
+
+    code = -1;
+    CHECK(winx_executor_run_once("false", NULL, out, sizeof(out), &code) == 0);
+    CHECK(code == 1);
+
+    code = -1;
+    CHECK(winx_executor_run_once("exit 42", NULL, out, sizeof(out), &code) == 0);
+    CHECK(code == 42);
+
+    code = -1;
+    CHECK(winx_executor_run_once("echo PIPE_X | grep PIPE_X", NULL,
+                                 out, sizeof(out), &code) == 0);
+    CHECK(code == 0);
+    CHECK(strstr(out, "PIPE_X") != NULL);
+
+    REPORT_SUITE("run_once");
+}
+
 int main(void)
 {
     test_backend_resolve();
     test_executor_echo();
     test_executor_pwd();
     test_executor_ls();
+    test_run_once();
     return g_failures > 0 ? 1 : 0;
 }

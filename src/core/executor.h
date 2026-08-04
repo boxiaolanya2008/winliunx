@@ -30,6 +30,9 @@ void winx_executor_close(winx_executor *e);
 
 int winx_executor_run(winx_executor *e, const char *command);
 
+int winx_executor_run_once(const char *command, const char *git_hint,
+                           char *out, size_t outcap, int *exit_code);
+
 int winx_executor_terminate(winx_executor *e);
 
 winx_exec_state winx_executor_state(const winx_executor *e);

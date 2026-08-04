@@ -3,6 +3,30 @@
 本项目严格遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.3.0 - 2026-08-04
+
+### 新增
+
+- `install.ps1`：一键全局安装，把 winlinux.exe 与 90+ 常用 Linux 命令 `.cmd` shim 写入
+  用户级 PATH（无需管理员）
+- shim 经 Git Bash 转发 GNU 工具，保留 glob 展开、管道、重定向与退出码透传
+- PowerShell / cmd / 任意终端可直接使用 `ls`、`grep`、`cat`、`ps` 等 Linux 命令
+- README 新增「全局命令」与「接入 AI 对话工具 / Agent」指南
+
+## 0.2.0 - 2026-08-04
+
+### 新增
+
+- 无头 CLI 模式 `winlinux -c "<command>"`：拉起 Git Bash 执行并原样回流 stdout，让
+  脚本、自动化与 AI Agent 一键调用
+- bash 退出码透传：CLI 模式退出码与命令一致（0/非 0），供脚本与 Judge 判断成败
+- `main()` 统一入口，无参数走 GUI，`-c` 走 CLI，`--help` 输出用法
+- README 新增「命令模式」与「接入 AI 对话工具 / Agent」指南
+
+### 测试
+
+- 新增 `run_once` 集成测试：stdout 捕获、退出码透传（echo/false/exit 42/管道）
+
 ## 0.1.2 - 2026-08-04
 
 ### 新增

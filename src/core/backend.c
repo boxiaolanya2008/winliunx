@@ -113,6 +113,13 @@ static char *build_env_block(const char *git_root)
     return buf;
 }
 
+int winx_backend_build_env(winx_backend *b)
+{
+    free(b->env);
+    b->env = build_env_block(b->git_root);
+    return b->env != NULL ? 0 : -1;
+}
+
 int winx_backend_spawn(winx_backend *b)
 {
     STARTUPINFOA si;
@@ -153,7 +160,9 @@ int winx_backend_spawn(winx_backend *b)
     snprintf(cmdline, sizeof(cmdline),
              "\"%s\" --noprofile --norc -s", b->bash_path);
 
-    b->env = build_env_block(b->git_root);
+    if (winx_backend_build_env(b) != 0) {
+        return -1;
+    }
 
     ok = CreateProcessA(
         b->bash_path,

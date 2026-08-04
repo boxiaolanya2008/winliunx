@@ -23,6 +23,8 @@ typedef struct winx_backend {
 
 int winx_backend_resolve(const char *hint, winx_backend *out);
 
+int winx_backend_build_env(winx_backend *b);
+
 int winx_backend_spawn(winx_backend *b);
 
 void winx_backend_spec(const winx_backend *b, winx_pipe_spec *out);

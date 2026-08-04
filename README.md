@@ -56,6 +56,63 @@ ctest --test-dir build --output-on-failure
 > .\winlinux.exe
 > ```
 
+## 命令模式（CLI）
+
+winlinux 除 GUI 外还提供无头 CLI 模式，供脚本、自动化与 AI Agent 直接调用：
+
+```powershell
+# 执行一条 Linux 命令，输出原样回流到 stdout，退出码与 bash 一致
+winlinux.exe -c "ls -la"
+winlinux.exe -c "grep winlinux README.md"
+winlinux.exe -c "exit 42"    # 退出码 42
+```
+
+- `winlinux.exe -c "<command>"`：拉起 Git Bash 执行命令，完成后进程退出
+- 退出码 = 命令的退出码（`0`/非 0），可用 `$LASTEXITCODE` 或 `Start-Process` 的 `ExitCode` 判断成败
+- 复杂命令可含管道/替换：`winlinux.exe -c "ps aux | grep vim"`
+
+> [!TIP]
+> 由于 winlinux.exe 是 GUI 子系统，在 PowerShell 中获取退出码推荐用：
+> ```powershell
+> $p = Start-Process -FilePath .\winlinux.exe -ArgumentList '-c','ls -la' -Wait -PassThru -NoNewWindow
+> $p.ExitCode
+> ```
+
+## 全局命令（Global Install）
+
+一键把 winlinux 与整套 Linux 命令装进系统（用户级）PATH，让 `ls`、`grep`、`cat`、`ps` 等同名 Linux 命令在 **PowerShell / cmd / 任意终端** 里直接可用：
+
+```powershell
+.\install.ps1              # 安装，无需管理员
+.\install.ps1 -GitRoot "D:\Git"   # 指定 Git 安装根
+.\install.ps1 -Force       # 重新生成与覆盖
+```
+
+安装到 `%LOCALAPPDATA%\winlinux\bin` 会执行：
+- 复制 `winlinux.exe`
+- 生成 90+ 个 `.cmd` shim（`ls.cmd`、`grep.cmd`、…），经 Git Bash 转发 GNU 工具，保留 glob / 管道 / 退出码
+- 将 bin 目录写入**用户级** `PATH`（改环境变量即可生效，无需 UAC）
+
+> [!NOTE]
+> 需在**新开**的终端中生效。若 `ls` 等命令在你的 shell 中之前被别名/内建遮蔽，优先用完整路径调试。
+
+## 接入 AI 对话工具 / Agent
+
+让 ChatGPT、Copilot、Cursor 等 AI 使用 Linux 命令的策略：
+
+1. **推荐：全局安装后直接给 AI 一段约定**。AI 在终端里能直接敲 Linux 命令（无需前缀）：
+   ```text
+   这是 Windows 环境，但 Linux 命令 ls/grep/cat/ps 等已经全局可用（经 Git Bash 转发）。
+   请直接用 Linux 语义执行命令。等价于真正的 Linux shell。
+   例：列目录 -> ls -la        查看文件 -> cat README.md    过滤 -> grep winlinux README.md
+   ```
+2. **需要显式调用时**，用 winlinux 包裹：
+   ```text
+   winlinux -c "<linux命令>"    # 退出码 0=成功 / 非0=失败
+   例：winlinux -c "ls -la"   winlinux -c "cat README.md"   winlinux -c "wc -l file.txt"
+   ```
+3. **自己写的脚本 / Agent**：`CreateProcess` / `Start-Process` 调用 `winlinux -c "<命令>"`，读 stdout 与退出码即可。
+
 ## 架构
 
 ```
