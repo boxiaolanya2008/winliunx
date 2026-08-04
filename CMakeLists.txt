@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(winlinux
-    VERSION 0.3.0
+    VERSION 0.3.1
     DESCRIPTION "Native Win32 shell that executes Linux commands via Git Bash"
     LANGUAGES C
 )

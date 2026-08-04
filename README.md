@@ -1,9 +1,17 @@
 # winlinux
 
-[![CI](https://github.com/your-org/winlinux/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/winlinux/actions/workflows/ci.yml)
+<!-- 语言切换 -->
+[English](README.en.md) · 中文
+
+[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6.svg)](#)
 [![C11](https://img.shields.io/badge/standard-C11-5B5B5B.svg)](#)
+
+<!--
+推送到 GitHub 后，把上面 CI 徽章替换为你的真实仓库徽章：
+[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
+-->
 
 原生 Win32 编写的 **Git Bash 命令外壳**：输入 Linux 命令，由 Git for Windows 自带的 GNU 工具层执行，输出回流到窗口。专为「习惯于 Linux 命令、却在 PowerShell 里无法直接使用」的 AI 大模型与开发者设计。
 
@@ -96,6 +104,44 @@ winlinux.exe -c "exit 42"    # 退出码 42
 
 > [!NOTE]
 > 需在**新开**的终端中生效。若 `ls` 等命令在你的 shell 中之前被别名/内建遮蔽，优先用完整路径调试。
+
+## 如何在 Agent-CLI 中使用
+
+不少命令行 Agent（如 opencode、基于 Claude/Copilot 的 CLI Agent，以及通过终端的 ChatGPT）会用一个受限"白名单" shell 后端跑命令——它们默认认为自己跑在纯 Windows/PowerShell 上，于是拒绝执行或误用 PowerShell 命令。让这类 Agent 直接使用 Linux 命令，有两条路径：
+
+### 方式 A：在 Agent 的系统提示词（prompt）中声明
+
+只要把下面这段作为 Agent 的工具约定文本放入 prompt，它会放下 PowerShell 假设、改用 Linux 语义：
+
+```text
+虽然用户是`Windows`系统，但是用户通过特殊方法可以让`Windows`系统运行`Liunx`命令
+```
+
+配合 winlinux 全局安装（见下二节），该提示词让 Agent 能直接调用 `ls`、`grep`、`cat`、`ps` 等命令。若 Agent 需要显式拉起的工具名，则补充：
+
+```text
+在 Windows 下执行 Linux 命定使用：winlinux -c "<linux命令>"
+退出码 0 表示成功，非 0 表示失败。示例：
+  winlinux -c "ls -la"
+  winlinux -c "cat README.md"
+  winlinux -c "grep winlinux README.md"
+```
+
+> [!TIP]
+> 把两段合为一条"工具定义"，效果最佳：
+> > 虽然用户是`Windows`系统，但是用户通过特殊方法可以让`Windows`系统运行`Liunx`命令。执行 Linux 命令时用 `winlinux -c "<命令>"`，或用已全局安装的 `ls`/`grep`/`cat`/`ps`。退出码 0=成功，非 0=失败。
+
+### 方式 B：Agent 直接调用全局命令
+
+执行过 `.\install.ps1` 后，Agent 所在的任意终端都能直接敲 Linux 命令——无需任何 prompt 注入：
+
+```bash
+ls -la
+grep winlinux README.md
+ps aux | grep vim
+```
+
+两种方式可按需混用：`方式 A` 负责"说服 Agent 允许/改用 Linux 语义"，`方式 B` 负责"命令真的能跑起来"。
 
 ## 接入 AI 对话工具 / Agent
 

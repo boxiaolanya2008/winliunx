@@ -30,6 +30,11 @@
 
 Conventional Commits：`feat:` / `fix:` / `docs:` / `refactor:` / `build:` / `ci:` / `test:` / `chore:`。
 
+## 文档双语同步
+
+- `README.md`（中文）与 `README.en.md`（英文）需保持内容一致；改动任一章节时同步维护另一份。
+- 「如何在 Agent-CLI 中使用」章节必须同时存在于两份 README，且保留推荐的 agent 提示词。
+
 ## 运行依赖
 
 Git for Windows（提供 `usr/bin` 的 GNU 工具）。构建依赖：MinGW-w64 或 MSVC + CMake ≥ 3.16。

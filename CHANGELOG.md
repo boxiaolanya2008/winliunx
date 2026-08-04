@@ -3,6 +3,15 @@
 本项目严格遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.3.1 - 2026-08-04
+
+### 文档
+
+- 新增英文版 `README.en.md`（地道英文，覆盖全部章节与 Agent-CLI 用法）
+- README 新增「如何在 Agent-CLI 中使用」章节，含推荐的 agent 系统提示词
+- 修复 CI 徽章占位导致显示异常，改为始终正常渲染的静态徽章并附替换注释
+- README 顶部加入中/英语言切换链接
+
 ## 0.3.0 - 2026-08-04
 
 ### 新增
